@@ -49,6 +49,20 @@ def get_hfi_returns():
     return hfi
 
 
+def get_industry_returns():
+    """
+    Load and format the Ken French 30 Industry Portfolios Value Weighted Monthly Returns
+    """
+    industry_returns = pd.read_csv(
+        "../data/ind30_m_vw_rets.csv", header=0, index_col=0, parse_dates=True, na_values=-99.99) / 100
+    industry_returns.index = pd.to_datetime(
+        industry_returns.index, format="%Y%m").to_period("M")
+
+    industry_returns.columns = industry_returns.columns.str.strip()
+
+    return industry_returns
+
+
 def semideviation(r):
     """
     Returns the semideviation aka negative semideviation of r
