@@ -157,3 +157,29 @@ def cvar_historic(r, level=5):
         return r.aggregate(cvar_historic, level=level)
     else:
         raise TypeError("Expected r to be a Series or DataFrame")
+
+
+def annualize_volatility(returns: pd.Series, months_per_year=12):
+    """
+    Annualizes the volatility of a set of returns
+    """
+
+    return returns.std() * np.sqrt(months_per_year)
+
+
+def annualize_returns(returns: pd.Series, months_per_year: int = 12):
+    """
+    Annualizes a set of returns
+    """
+    n_months = returns.shape[0]
+    return (returns + 1).prod() ** (months_per_year / n_months) - 1
+
+
+def sharpe_ratio(returns: pd.Series, months_per_year: int, risk_free_rate=0.03):
+    """
+    Computes the annualized sharpe ratio of a set of returns
+    """
+    annualized_return = annualize_returns(returns, months_per_year)
+    annualized_vol = annualize_volatility(returns)
+
+    return (annualized_return - risk_free_rate) / annualized_vol
