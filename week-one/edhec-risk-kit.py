@@ -1,6 +1,8 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scipy.stats
+from scipy.optimize import minimize
 
 
 def create_drawdown(return_data: pd.Series, capital=1000):
@@ -183,3 +185,103 @@ def sharpe_ratio(returns: pd.Series, months_per_year: int, risk_free_rate=0.03):
     annualized_vol = annualize_volatility(returns)
 
     return (annualized_return - risk_free_rate) / annualized_vol
+
+
+def portfolio_return(weights, returns):
+    """
+    Weights -> Returns
+    """
+    return weights.T @ returns
+
+
+def portfolio_volatility(weights, covariance_matrix):
+    """
+    Weights -> Volatility
+    """
+    return (weights.T @ covariance_matrix @ weights) ** 0.5
+
+
+def plot_efficient_frontier(n_points, returns, covariance_matrix, style=".-"):
+    """
+    Plots the 2-asset efficient frontier
+    """
+    if returns.shape[0] != 2:
+        raise ValueError("Plot_ef2 can only plot 2-asset frontiers")
+
+    weights = [np.array([w, 1-w]) for w in np.linspace(0, 1, n_points)]
+    portfolio_returns = [portfolio_return(w, returns) for w in weights]
+    portfolio_volatilities = [portfolio_volatility(
+        w, covariance_matrix) for w in weights]
+
+    df_portfolio = pd.DataFrame({
+        "Portfolio Returns": portfolio_returns,
+        "Portfolio Volatilities": portfolio_volatilities
+    })
+
+    figure = plt.figure(figsize=(20, 20))
+
+    return df_portfolio.plot(x="Portfolio Volatilities", y="Portfolio Returns", style=style)
+
+
+def minimize_volatility(target_return, expected_return, cov):
+    """
+    target_return -> w (Weight vector)
+    """
+    n = expected_return.shape[0]
+    init_guess = np.repeat(1/n, n)
+    bounds = ((0.0, 1.0),) * n
+
+    # constraints #1
+    return_is_target = {
+        'type': 'eq',
+        'args': (expected_return,),
+        'fun': lambda weights, expected_return: target_return - portfolio_return(weights, expected_return)
+    }
+
+    # constraints #2
+    weights_sum_to_1 = {
+        'type': 'eq',
+        'fun': lambda weights: np.sum(weights) - 1
+    }
+
+    results = minimize(
+        portfolio_volatility, init_guess,
+        args=(cov,), method="SLSQP", options={"disp": False},
+        constraints=(return_is_target, weights_sum_to_1),
+        bounds=bounds
+    )
+
+    return results.x
+
+
+def optimal_weights(n_points, expected_return, cov):
+    """
+    Generates list of weights to run the optimizer on to minimize the volatility
+    """
+    target_returns = np.linspace(
+        expected_return.min(), expected_return.max(), n_points)
+    weights = [minimize_volatility(
+        target_return=target_return, expected_return=expected_return, cov=cov) for target_return in target_returns]
+
+    return weights
+
+
+def plot_efficient_frontier(n_points, expected_return, covariance_matrix):
+    """
+    Plots the multi-asset efficient frontier
+    """
+
+    weights = optimal_weights(n_points, expected_return, covariance_matrix)
+    portfolio_returns = [portfolio_return(
+        w, expected_return) for w in weights]
+    portfolio_volatilities = [portfolio_volatility(
+        w, covariance_matrix) for w in weights]
+
+    df_portfolio = pd.DataFrame({
+        "Portfolio Returns": portfolio_returns,
+        "Portfolio Volatilities": portfolio_volatilities
+    })
+
+    figure = plt.figure(figsize=(20, 20))
+
+    return df_portfolio.plot(x="Portfolio Volatilities", y="Portfolio Returns", style=".-")
