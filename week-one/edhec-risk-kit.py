@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 import pandas as pd
 import scipy.stats
 from scipy.optimize import minimize
@@ -56,7 +57,7 @@ def get_industry_returns():
     Load and format the Ken French 30 Industry Portfolios Value Weighted Monthly Returns
     """
     industry_returns = pd.read_csv(
-        "../data/ind30_m_vw_rets.csv", header=0, index_col=0, parse_dates=True, na_values=-99.99) / 100
+        f"{os.path.dirname(__file__)}/../data/ind30_m_vw_rets.csv", header=0, index_col=0, parse_dates=True, na_values=-99.99) / 100
     industry_returns.index = pd.to_datetime(
         industry_returns.index, format="%Y%m").to_period("M")
 
@@ -177,7 +178,7 @@ def annualize_returns(returns: pd.Series, months_per_year: int = 12):
     return (returns + 1).prod() ** (months_per_year / n_months) - 1
 
 
-def sharpe_ratio(returns: pd.Series, months_per_year: int, risk_free_rate=0.03):
+def sharpe_ratio(returns: pd.Series, months_per_year: int = 12, risk_free_rate=0.03):
     """
     Computes the annualized sharpe ratio of a set of returns
     """
@@ -201,7 +202,7 @@ def portfolio_volatility(weights, covariance_matrix):
     return (weights.T @ covariance_matrix @ weights) ** 0.5
 
 
-def plot_efficient_frontier(n_points, returns, covariance_matrix, style=".-"):
+def plot_efficient_frontier(n_points, returns, covariance_matrix, style=".-", figsize=(15, 7)):
     """
     Plots the 2-asset efficient frontier
     """
@@ -218,9 +219,7 @@ def plot_efficient_frontier(n_points, returns, covariance_matrix, style=".-"):
         "Portfolio Volatilities": portfolio_volatilities
     })
 
-    figure = plt.figure(figsize=(20, 20))
-
-    return df_portfolio.plot(x="Portfolio Volatilities", y="Portfolio Returns", style=style)
+    return df_portfolio.plot(color="#cbad45", x="Portfolio Volatilities", y="Portfolio Returns", style=style, figsize=figsize)
 
 
 def minimize_volatility(target_return, expected_return, cov):
@@ -266,7 +265,7 @@ def optimal_weights(n_points, expected_return, cov):
     return weights
 
 
-def plot_efficient_frontier(n_points, expected_return, covariance_matrix):
+def plot_efficient_frontier(n_points, expected_return, covariance_matrix, figsize=(15, 7)):
     """
     Plots the multi-asset efficient frontier
     """
@@ -282,6 +281,4 @@ def plot_efficient_frontier(n_points, expected_return, covariance_matrix):
         "Portfolio Volatilities": portfolio_volatilities
     })
 
-    figure = plt.figure(figsize=(20, 20))
-
-    return df_portfolio.plot(x="Portfolio Volatilities", y="Portfolio Returns", style=".-")
+    return df_portfolio.plot(color="#cbad45", x="Portfolio Volatilities", y="Portfolio Returns", style=".-", figsize=figsize)
