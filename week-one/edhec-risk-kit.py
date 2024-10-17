@@ -66,6 +66,34 @@ def get_industry_returns():
     return industry_returns
 
 
+def get_industry_size():
+    """
+    Load and format the Ken French 30 Industry Portfolios Value Weighted Monthly Returns
+    """
+    industry_size = pd.read_csv(
+        f"{os.path.dirname(__file__)}/../data/ind30_m_size.csv", header=0, index_col=0, parse_dates=True, na_values=-99.99)
+    industry_size.index = pd.to_datetime(
+        industry_size.index, format="%Y%m").to_period("M")
+
+    industry_size.columns = industry_size.columns.str.strip()
+
+    return industry_size
+
+
+def get_industry_nfirms():
+    """
+    Load and format the Ken French 30 Industry Portfolios Value Weighted Monthly Returns
+    """
+    industry_nfirms = pd.read_csv(
+        f"{os.path.dirname(__file__)}/../data/ind30_m_nfirms.csv", header=0, index_col=0, parse_dates=True, na_values=-99.99)
+    industry_nfirms.index = pd.to_datetime(
+        industry_nfirms.index, format="%Y%m").to_period("M")
+
+    industry_nfirms.columns = industry_nfirms.columns.str.strip()
+
+    return industry_nfirms
+
+
 def semideviation(r):
     """
     Returns the semideviation aka negative semideviation of r
@@ -265,7 +293,50 @@ def optimal_weights(n_points, expected_return, cov):
     return weights
 
 
-def plot_efficient_frontier(n_points, expected_return, covariance_matrix, figsize=(15, 7)):
+def msr(riskfree_rate, expected_return, cov):
+    """
+    Returns the weights of the portfolio that gives you the maximum sharpe ratio
+    given the riskfree rate and expected returns and a covariance matrix
+    """
+    n = expected_return.shape[0]
+    init_guess = np.repeat(1/n, n)
+    bounds = ((0.0, 1.0),) * n
+
+    # constraints #1
+    weights_sum_to_1 = {
+        'type': 'eq',
+        'fun': lambda weights: np.sum(weights) - 1
+    }
+
+    def negative_sharpe_ratio(weights, riskfree_rate, expected_return, cov):
+        """
+        Returns the negative of the sharep ratio, given weights
+        """
+        pf_return = portfolio_return(weights, expected_return)
+        pf_volatility = portfolio_volatility(weights, cov)
+
+        return -(pf_return - riskfree_rate) / pf_volatility
+
+    results = minimize(
+        negative_sharpe_ratio, init_guess,
+        args=(riskfree_rate, expected_return, cov,), method="SLSQP", options={"disp": False},
+        constraints=(weights_sum_to_1),
+        bounds=bounds
+    )
+
+    return results.x
+
+
+def global_minimum_variance(cov):
+    """
+    Given the covariance matrix ->
+    Returns the weight of the Global Minimum Volatility Portfolio
+    """
+    n_points = cov.shape[0]
+    return msr(0, np.repeat(1, n_points), cov)
+
+
+def plot_efficient_frontier(n_points, expected_return, covariance_matrix, riskfree_rate=0.1, showcml=False, show_equally_weighted=False, show_gmv=False, style=".-", figsize=(15, 7)):
     """
     Plots the multi-asset efficient frontier
     """
@@ -281,4 +352,40 @@ def plot_efficient_frontier(n_points, expected_return, covariance_matrix, figsiz
         "Portfolio Volatilities": portfolio_volatilities
     })
 
-    return df_portfolio.plot(color="#cbad45", x="Portfolio Volatilities", y="Portfolio Returns", style=".-", figsize=figsize)
+    ax = df_portfolio.plot(color="#cbad45", x="Portfolio Volatilities",
+                           y="Portfolio Returns", style=style, figsize=figsize)
+
+    if show_equally_weighted:
+        n_points = expected_return.shape[0]
+        equally_weighted = np.repeat(1 / n_points, n_points)
+        ew_portfolio_return = portfolio_return(
+            equally_weighted, expected_return)
+        ew_portfolio_volatility = portfolio_volatility(
+            equally_weighted, covariance_matrix)
+
+        # display equally weighted
+        ax.plot([ew_portfolio_volatility], [ew_portfolio_return],
+                color="#66ccee", marker="o", markersize=12)
+
+    if show_gmv:
+        w_gmv = global_minimum_variance(covariance_matrix)
+        gmv_return = portfolio_return(w_gmv, expected_return)
+        gmv_volatility = portfolio_volatility(w_gmv, covariance_matrix)
+
+        # display global_minimum_variance
+        ax.plot([gmv_volatility], [gmv_return],
+                color="midnightblue", marker="o", markersize=10)
+
+    if (showcml):
+        ax.set_xlim(left=0)
+
+        weights_smr = msr(riskfree_rate, expected_return, covariance_matrix)
+        return_smr = portfolio_return(weights_smr, expected_return)
+        volatility_smr = portfolio_volatility(weights_smr, covariance_matrix)
+
+        cml_x = [0, volatility_smr]
+        cml_y = [riskfree_rate, return_smr]
+
+        ax.plot(cml_x, cml_y, color="green", linestyle="dashed", marker="*")
+
+    return ax
