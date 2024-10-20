@@ -94,6 +94,21 @@ def get_industry_nfirms():
     return industry_nfirms
 
 
+def get_total_market_index_returns():
+    """
+    Load the 30 industry portfolio data and derive the returns of a capweighted total market index
+    """
+    industry_nfirms = get_industry_nfirms()
+    industry_size = get_industry_size()
+    industry_return = get_industry_returns()
+    industry_mktcap = industry_nfirms * industry_size
+    total_mktcap = industry_mktcap.sum(axis=1)
+    industry_capweight = industry_mktcap.divide(total_mktcap, axis="rows")
+    total_market_return = (industry_capweight *
+                           industry_return).sum(axis="columns")
+    return total_market_return
+
+
 def semideviation(r):
     """
     Returns the semideviation aka negative semideviation of r
