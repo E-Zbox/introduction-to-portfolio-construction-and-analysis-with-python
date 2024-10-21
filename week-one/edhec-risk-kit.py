@@ -404,3 +404,104 @@ def plot_efficient_frontier(n_points, expected_return, covariance_matrix, riskfr
         ax.plot(cml_x, cml_y, color="green", linestyle="dashed", marker="*")
 
     return ax
+
+
+def run_cppi(risky_asset_return, safe_asset_return=None, multiplier=3, start=1000, floor=0.8, riskfree_rate=0.03, drawdown=None):
+    """
+    Run a backtest of the CPPI strategy, given a set of returns for the risky asset
+    Returns a dictionary containing: Asset Value History
+    """
+    # set up the CPPI parameters
+    dates = risky_asset_return.index
+    n_steps = len(dates)
+    account_value = start
+    floor_value = start * floor
+    previous_peak = start
+
+    if isinstance(risky_asset_return, pd.Series):
+        risky_asset_return = pd.DataFrame(risky_asset_return, columns=["R"])
+
+    if safe_asset_return is None:
+        safe_asset_return = pd.DataFrame().reindex_like(risky_asset_return)
+        safe_asset_return.values[:] = riskfree_rate / 12
+
+    # set up some DataFrames for saving intermediate values
+    account_history = pd.DataFrame().reindex_like(risky_asset_return)
+    # Asset Value - Floor Value
+    cushion_history = pd.DataFrame().reindex_like(risky_asset_return)
+    # weight in risky asset
+    risky_weight_history = pd.DataFrame().reindex_like(risky_asset_return)
+
+    for step in range(n_steps):
+        if drawdown is not None:
+            previous_peak = np.maximum(previous_peak, account_value)
+            floor_value = previous_peak * (1 - drawdown)
+
+        cushion = (account_value - floor_value) / account_value
+
+        risky_weight = multiplier * cushion
+        risky_weight = np.minimum(risky_weight, 1)
+        risky_weight = np.maximum(risky_weight, 0)
+
+        safe_weight = 1 - risky_weight
+
+        risky_allocation = account_value * risky_weight
+        safe_allocation = account_value * safe_weight
+
+        # update the account value for timestamp @ iloc[step]
+        account_value = risky_allocation * \
+            (1 + risky_asset_return.iloc[step]) + \
+            safe_allocation * (1 + safe_asset_return.iloc[step])
+
+        # save the values so we can look at the history and plot it
+        cushion_history.iloc[step] = cushion
+        risky_weight_history.iloc[step] = risky_weight
+        account_history.iloc[step] = account_value
+
+    risky_wealth = start * (1 + risky_asset_return).cumprod()
+
+    backtest_result = {
+        'Wealth': account_history,
+        'Risky Wealth': risky_wealth,
+        'Risk Budget': cushion_history,
+        'Risky Allocation': risky_weight_history,
+        'Multiplier': multiplier,
+        'start': start,
+        'floor': floor,
+        'risky_asset_return': risky_asset_return,
+        'safe_asset_return': safe_asset_return,
+    }
+
+    return backtest_result
+
+
+def summary_stats(returns, riskfree_rate=0.03):
+    """
+    Return a DataFrame that contains aggregated summary stats for the returns in the columns of r
+    """
+    annualized_return = returns.aggregate(
+        annualize_returns, months_per_year=12)
+    annualized_volatility = returns.aggregate(
+        annualize_volatility, months_per_year=12)
+    annualized_sharpe_ratio = returns.aggregate(
+        sharpe_ratio, months_per_year=12, risk_free_rate=riskfree_rate)
+
+    drawdown = returns.aggregate(lambda r: create_drawdown(r).Drawdown.min())
+
+    skew = returns.aggregate(skewness)
+    kurt = returns.aggregate(kurtosis)
+
+    # VaR - Value at Risk
+    cornish_fisher_var5 = returns.aggregate(var_gaussian, modified=True)
+    historical_cvar5 = returns.aggregate(cvar_historic)
+
+    return pd.DataFrame({
+        "Annualized Return": annualized_return,
+        "Annualized Volatility": annualized_volatility,
+        "Skewness": skew,
+        "Kurtosis": kurt,
+        "Cornish-Fisher VaR (5%)": cornish_fisher_var5,
+        "Historic CVaR (5%)": historical_cvar5,
+        "Sharpe Ratio": annualized_sharpe_ratio,
+        "Max Drawdown": drawdown
+    })
