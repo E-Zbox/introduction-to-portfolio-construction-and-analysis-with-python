@@ -505,3 +505,23 @@ def summary_stats(returns, riskfree_rate=0.03):
         "Sharpe Ratio": annualized_sharpe_ratio,
         "Max Drawdown": drawdown
     })
+
+
+def gbm(n_years=10, n_scenarios=1000, mui=0.07, sigma=0.15, steps_per_year=12, s_0=100.0, prices=False):
+    """
+    Evolution of a Stock Price using a Geometric Brownian Motion model
+    """
+    dt = 1 / steps_per_year
+    n_steps = int(n_years * steps_per_year)
+
+    zai = np.random.normal(size=(n_steps, n_scenarios))
+
+    returns = mui * dt + sigma * np.sqrt(dt) * zai
+    # returns[0] = 1
+    returns = pd.DataFrame(returns)
+
+    # to prices
+    if prices:
+        returns = s_0 * (1 + returns).cumprod()
+
+    return returns
